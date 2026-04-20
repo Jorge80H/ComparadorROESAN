@@ -18,10 +18,8 @@ Cada objeto en el arreglo JSON debe tener EXACTAMENTE estas claves (usa null si 
     "aseguradora": "nombre de la compañía",
     "nombre_plan": "nombre del plan o producto (ej: Super Trébol, Autos Plus, Llave en Mano, Seguro Elite)",
     "prima_neta": 0,
-    "valor_asistencia": 0,
     "gastos_expedicion": 0,
     "iva": 0,
-    "iva_asistencia": 0,
     "prima_total": 0,
     "valor_asegurado": 0,
     "tomador": "nombre completo",
@@ -52,16 +50,13 @@ ALLIANZ:
 - Si el modelo es anterior a 2025: extraer SOLO "Autos Plus"
 - DEBES incluir TODOS los campos numéricos (prima_neta, iva, prima_total). Si ves datos, NO los dejes en 0.
 
-BOLÍVAR (o "Seguros Bolívar"):
-- MUY IMPORTANTE: Suelen separar la "Prima" de la "Asistencia". 
-- Extrae la prima de amparos en 'prima_neta'.
-- Extrae el valor de la asistencia en 'valor_asistencia'.
-- Extrae el IVA de la prima en 'iva'.
-- Extrae el IVA de la asistencia en 'iva_asistencia'.
-- 'prima_total' DEBE ser la suma de todos los anteriores + gastos de expedición si los hay.
-- Si ves "IVA TOTAL", y no puedes separarlos, pon el total en 'iva' y 0 en 'iva_asistencia'.
-
 MAPFRE:
+- PARÁMETRO GÉNERO: "{genero}"
+- PARÁMETRO ANTIGÜEDAD VEHÍCULO: "{antiguedad}" años
+- Si la antigüedad del vehículo es 3 años o menos: extraer la cotización "Llave en Mano" (NO la estándar)
+- Si la antigüedad es mayor a 3 años: extraer la cotización estándar
+- Si género = "HOMBRE": extraer SOLO la cotización "Super Trébol"
+- Si género = "MUJER": extraer "Super Trébol" Y la cotización adicional que aparezca (ej: Super Trébol + Demostra). Retornar 2 cotizaciones.
 
 SEGUROS DEL ESTADO (o "El Estado"):
 - Extraer ÚNICAMENTE la opción "Seguro Elite para Auto". Ignorar las demás.
@@ -94,7 +89,7 @@ export async function handler(event) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-flash-latest",
       generationConfig: {
         responseMimeType: "application/json",
       },
@@ -147,10 +142,8 @@ export async function handler(event) {
       aseguradora: String(c.aseguradora || "Desconocida").trim(),
       nombre_plan: String(c.nombre_plan || "").trim(),
       prima_neta: toInt(c.prima_neta),
-      valor_asistencia: toInt(c.valor_asistencia),
       gastos_expedicion: toInt(c.gastos_expedicion),
       iva: toInt(c.iva),
-      iva_asistencia: toInt(c.iva_asistencia),
       prima_total: toInt(c.prima_total),
       valor_asegurado: toInt(c.valor_asegurado),
       tomador: String(c.tomador || "").trim(),
