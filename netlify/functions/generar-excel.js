@@ -106,8 +106,10 @@ export async function handler(event) {
     fila = addSectionHeader(ws, fila, "PRIMA", numCols);
     const primaFields = [
       ["Prima sin IVA", "prima_neta"],
+      ["Valor Asistencia", "valor_asistencia"],
       ["Gastos Expedición", "gastos_expedicion"],
-      ["IVA", "iva"],
+      ["IVA (Prima)", "iva"],
+      ["IVA (Asistencia)", "iva_asistencia"],
       ["PRIMA TOTAL ANUAL", "prima_total"],
     ];
     for (const [label, field] of primaFields) {

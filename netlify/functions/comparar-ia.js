@@ -70,6 +70,8 @@ export async function handler(event) {
         nombre_plan: c.nombre_plan || "",
         es_renovacion: c.es_renovacion || false,
         prima_neta: c.prima_neta,
+        valor_asistencia: c.valor_asistencia,
+        iva_asistencia: c.iva_asistencia,
         prima_total: c.prima_total,
         iva: c.iva,
         gastos_expedicion: c.gastos_expedicion,
@@ -105,7 +107,7 @@ export async function handler(event) {
     // Llamar a Gemini
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.0-flash",
       generationConfig: { responseMimeType: "application/json" },
     });
 
