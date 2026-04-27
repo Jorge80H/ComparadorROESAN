@@ -2,6 +2,9 @@
  * procesar-pdf.js — Netlify Function
  * Recibe un PDF como base64, lo envía directamente a Gemini para extracción.
  * NO usa pdfplumber — Gemini lee el PDF nativamente.
+ * 
+ * v2.1 — Prompt enriquecido con estructura de coberturas granulares
+ *         inspirada en comparativo.py (deducibles %, SMMLV, RCE, etc.)
  */
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
@@ -29,6 +32,48 @@ Cada objeto en el arreglo JSON debe tener EXACTAMENTE estas claves (usa null si 
     "vigencia_desde": "DD/MM/YYYY",
     "vigencia_hasta": "DD/MM/YYYY",
     "zona_circulacion": "ciudad",
+
+    "coberturas_detalle": {
+      "rce": {
+        "limite": 0,
+        "deducible_pct": 0,
+        "deducible_smmlv": 0,
+        "sin_deducible": false
+      },
+      "perdida_total_danios": {
+        "valor_asegurado": 0,
+        "deducible_pct": 0,
+        "deducible_smmlv": 0
+      },
+      "perdida_parcial_danios": {
+        "valor_asegurado": 0,
+        "deducible_pct": 0,
+        "deducible_smmlv": 0
+      },
+      "perdida_total_hurto": {
+        "valor_asegurado": 0,
+        "deducible_pct": 0,
+        "deducible_smmlv": 0
+      },
+      "perdida_parcial_hurto": {
+        "valor_asegurado": 0,
+        "deducible_pct": 0,
+        "deducible_smmlv": 0
+      },
+      "terremoto": false,
+      "proteccion_patrimonial": false,
+      "asistencia_juridica_penal": false,
+      "asistencia_juridica_penal_valor": 0,
+      "asistencia_juridica_civil": false,
+      "asistencia_juridica_civil_valor": 0,
+      "lucro_cesante": false,
+      "accidentes_personales_conductor": 0,
+      "asistencia_en_viaje": false,
+      "vehiculo_sustituto": false,
+      "gastos_transporte": false,
+      "cobertura_vidrios": false
+    },
+
     "coberturas": [
       {"nombre": "nombre cobertura", "valor": "valor numérico o INCLUIDA"}
     ],
@@ -38,10 +83,23 @@ Cada objeto en el arreglo JSON debe tener EXACTAMENTE estas claves (usa null si 
   }
 ]
 
-REGLAS IMPORTANTES:
+INSTRUCCIONES PARA "coberturas_detalle":
+- "rce" = Responsabilidad Civil Extracontractual. "limite" es el valor máximo de cobertura en pesos.
+- Los campos "deducible_pct" son el porcentaje del deducible (ej: 10 = 10%).
+- Los campos "deducible_smmlv" son el mínimo en Salarios Mínimos Mensuales (ej: 2 = 2 SMMLV).
+- Si dice "SIN DEDUCIBLE", pon deducible_pct=0, deducible_smmlv=0 y sin_deducible=true.
+- "accidentes_personales_conductor" es el valor asegurado en pesos para esa cobertura.
+- "asistencia_juridica_penal_valor" y "asistencia_juridica_civil_valor" son montos en pesos si se especifican.
+- Los campos booleanos (terremoto, proteccion_patrimonial, etc.) son true si la cobertura está incluida/amparada.
+- Si no encuentras un dato, usa 0 para números y false para booleanos.
+
+INSTRUCCIONES PARA "coberturas" y "deducibles":
+- Estas listas son un respaldo. Lista TODAS las coberturas y deducibles que aparezcan en el documento.
+- Las listas pueden estar vacías: []
+
+REGLAS DE VALORES NUMÉRICOS:
 - Los valores numéricos (prima_neta, iva, prima_total, etc.) DEBEN ser NÚMEROS ENTEROS SIN puntos ni comas ni símbolo $. Ejemplo: 1288331
 - Si prima_total es 0, REVISA DE NUEVO el documento. Es CASI IMPOSIBLE que una cotización tenga prima $0.
-- Las listas coberturas y deducibles pueden estar vacías: []
 
 REGLAS POR ASEGURADORA:
 
@@ -153,6 +211,7 @@ export async function handler(event) {
       vigencia_desde: String(c.vigencia_desde || "").trim(),
       vigencia_hasta: String(c.vigencia_hasta || "").trim(),
       zona_circulacion: String(c.zona_circulacion || "BOGOTÁ").trim(),
+      coberturas_detalle: normalizarCoberturasDetalle(c.coberturas_detalle),
       coberturas: Array.isArray(c.coberturas) ? c.coberturas : [],
       deducibles: Array.isArray(c.deducibles) ? c.deducibles : [],
     }));
@@ -196,6 +255,94 @@ function toInt(val) {
   try {
     const s = String(val).replace(/\$/g, "").replace(/\./g, "").replace(/,/g, "").trim();
     return parseInt(parseFloat(s)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Normaliza el objeto coberturas_detalle que viene de Gemini.
+ * Asegura que todos los campos existan con defaults sensatos.
+ */
+function normalizarCoberturasDetalle(cd) {
+  if (!cd || typeof cd !== "object") {
+    return defaultCoberturasDetalle();
+  }
+
+  const rce = cd.rce || {};
+  const ptd = cd.perdida_total_danios || {};
+  const ppd = cd.perdida_parcial_danios || {};
+  const pth = cd.perdida_total_hurto || {};
+  const pph = cd.perdida_parcial_hurto || {};
+
+  return {
+    rce: {
+      limite: toInt(rce.limite),
+      deducible_pct: toFloat(rce.deducible_pct),
+      deducible_smmlv: toFloat(rce.deducible_smmlv),
+      sin_deducible: Boolean(rce.sin_deducible),
+    },
+    perdida_total_danios: {
+      valor_asegurado: toInt(ptd.valor_asegurado),
+      deducible_pct: toFloat(ptd.deducible_pct),
+      deducible_smmlv: toFloat(ptd.deducible_smmlv),
+    },
+    perdida_parcial_danios: {
+      valor_asegurado: toInt(ppd.valor_asegurado),
+      deducible_pct: toFloat(ppd.deducible_pct),
+      deducible_smmlv: toFloat(ppd.deducible_smmlv),
+    },
+    perdida_total_hurto: {
+      valor_asegurado: toInt(pth.valor_asegurado),
+      deducible_pct: toFloat(pth.deducible_pct),
+      deducible_smmlv: toFloat(pth.deducible_smmlv),
+    },
+    perdida_parcial_hurto: {
+      valor_asegurado: toInt(pph.valor_asegurado),
+      deducible_pct: toFloat(pph.deducible_pct),
+      deducible_smmlv: toFloat(pph.deducible_smmlv),
+    },
+    terremoto: Boolean(cd.terremoto),
+    proteccion_patrimonial: Boolean(cd.proteccion_patrimonial),
+    asistencia_juridica_penal: Boolean(cd.asistencia_juridica_penal),
+    asistencia_juridica_penal_valor: toInt(cd.asistencia_juridica_penal_valor),
+    asistencia_juridica_civil: Boolean(cd.asistencia_juridica_civil),
+    asistencia_juridica_civil_valor: toInt(cd.asistencia_juridica_civil_valor),
+    lucro_cesante: Boolean(cd.lucro_cesante),
+    accidentes_personales_conductor: toInt(cd.accidentes_personales_conductor),
+    asistencia_en_viaje: Boolean(cd.asistencia_en_viaje),
+    vehiculo_sustituto: Boolean(cd.vehiculo_sustituto),
+    gastos_transporte: Boolean(cd.gastos_transporte),
+    cobertura_vidrios: Boolean(cd.cobertura_vidrios),
+  };
+}
+
+function defaultCoberturasDetalle() {
+  return {
+    rce: { limite: 0, deducible_pct: 0, deducible_smmlv: 0, sin_deducible: false },
+    perdida_total_danios: { valor_asegurado: 0, deducible_pct: 0, deducible_smmlv: 0 },
+    perdida_parcial_danios: { valor_asegurado: 0, deducible_pct: 0, deducible_smmlv: 0 },
+    perdida_total_hurto: { valor_asegurado: 0, deducible_pct: 0, deducible_smmlv: 0 },
+    perdida_parcial_hurto: { valor_asegurado: 0, deducible_pct: 0, deducible_smmlv: 0 },
+    terremoto: false,
+    proteccion_patrimonial: false,
+    asistencia_juridica_penal: false,
+    asistencia_juridica_penal_valor: 0,
+    asistencia_juridica_civil: false,
+    asistencia_juridica_civil_valor: 0,
+    lucro_cesante: false,
+    accidentes_personales_conductor: 0,
+    asistencia_en_viaje: false,
+    vehiculo_sustituto: false,
+    gastos_transporte: false,
+    cobertura_vidrios: false,
+  };
+}
+
+function toFloat(val) {
+  if (val === null || val === undefined) return 0;
+  try {
+    return parseFloat(val) || 0;
   } catch {
     return 0;
   }

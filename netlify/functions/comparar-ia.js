@@ -74,6 +74,7 @@ export async function handler(event) {
         iva: c.iva,
         gastos_expedicion: c.gastos_expedicion,
         valor_asegurado: c.valor_asegurado,
+        coberturas_detalle: c.coberturas_detalle || null,
         coberturas: c.coberturas || [],
         deducibles: c.deducibles || [],
       }));

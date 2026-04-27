@@ -1,6 +1,7 @@
 import { useState } from "react";
 import db from "../lib/instantdb";
 import { fmtPeso } from "../lib/helpers";
+import { Eye, CheckCheck, Clock } from "lucide-react";
 
 export default function HistoryScreen({ onResumeSession, onNewCase }) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -77,6 +78,7 @@ export default function HistoryScreen({ onResumeSession, onNewCase }) {
                 <th>VEHÍCULO / PLACA</th>
                 <th>ASEG. SELECCIONADA</th>
                 <th>PRIMA TOTAL</th>
+                <th>ESTADO VISTA</th>
                 <th>ACCIONES</th>
               </tr>
             </thead>
@@ -96,6 +98,22 @@ export default function HistoryScreen({ onResumeSession, onNewCase }) {
                     {s.accion === "RENOVAR" && <span className="badge-renov" style={{ fontSize: "9px" }}>RENOVACIÓN</span>}
                   </td>
                   <td style={{ fontWeight: 700 }}>{fmtPeso(s.prima_total)}</td>
+                  <td>
+                    {s.visto_por_cliente ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--success, #10b981)", fontSize: "12px", fontWeight: "bold" }}>
+                        <CheckCheck size={16} /> Visto
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text2)", fontSize: "12px" }}>
+                        <Clock size={16} /> Pendiente
+                      </div>
+                    )}
+                    {s.fecha_visto && (
+                      <div style={{ fontSize: "10px", color: "var(--text3)", marginTop: "4px" }}>
+                        {new Date(s.fecha_visto).toLocaleString("es-CO", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    )}
+                  </td>
                   <td>
                     <button 
                       className="btn btn-sm btn-outline" 

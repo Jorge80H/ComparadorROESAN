@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
+import { Routes, Route } from "react-router-dom";
 import Header from "./components/Header";
 import AuthScreen from "./components/AuthScreen";
 import UploadScreen from "./components/UploadScreen";
@@ -6,9 +7,11 @@ import ComparativoScreen from "./components/ComparativoScreen";
 import SeleccionScreen from "./components/SeleccionScreen";
 import CorreoScreen from "./components/CorreoScreen";
 import HistoryScreen from "./components/HistoryScreen";
+import PropuestaDigitalScreen from "./components/PropuestaDigitalScreen";
 import { generarCorreo } from "./lib/emailGenerator";
 import { normalizarCoberturas, normalizarDeducibles } from "./lib/coverageMapping";
 import db from "./lib/instantdb";
+
 
 // If InstantDB is configured, use a wrapper that calls useAuth unconditionally
 function AppWithInstantDB() {
@@ -30,10 +33,12 @@ function AppWithInstantDB() {
 
 // Main export: decides whether to use InstantDB auth or fallback
 export default function App() {
-  if (db) {
-    return <AppWithInstantDB />;
-  }
-  return <AppMain dbUser={null} />;
+  return (
+    <Routes>
+      <Route path="/propuesta/:id" element={<PropuestaDigitalScreen />} />
+      <Route path="*" element={db ? <AppWithInstantDB /> : <AppMain dbUser={null} />} />
+    </Routes>
+  );
 }
 
 function AppMain({ dbUser }) {
@@ -224,6 +229,7 @@ function AppMain({ dbUser }) {
               aseg_renovacion: asegRenovacion,
               diferencia_prima: diferenciaPrima,
               correo_generado: correo,
+              enlace_propuesta: window.location.origin + "/propuesta/" + id,
             })
           );
         } catch (err) {

@@ -1,7 +1,9 @@
 /**
  * generar-excel.js — Netlify Function
  * Genera el Excel comparativo "sábana" con TODAS las cotizaciones.
- * Usa ExcelJS en lugar de openpyxl.
+ * 
+ * v2.1 — Secciones enriquecidas con coberturas_detalle granulares
+ *         (RCE, pérdidas por daños/hurto con deducibles %, SMMLV, asistencias)
  */
 import ExcelJS from "exceljs";
 
@@ -64,7 +66,6 @@ export async function handler(event) {
     fila++;
 
     // ── ROW DE ASEGURADORAS ──
-    const headerRow = ws.getRow(fila);
     setCellStyled(ws, fila, 1, "CONCEPTO", GRIS_HEADER, true, "FF" + BLANCO);
     for (let i = 0; i < ordenadas.length; i++) {
       const cot = ordenadas[i];
@@ -119,8 +120,84 @@ export async function handler(event) {
     }
     fila++;
 
-    // ── COBERTURAS  ──
-    // Recopilar unión de todas las coberturas
+    // ── RESPONSABILIDAD CIVIL EXTRACONTRACTUAL (RCE) ──
+    const tieneDetalle = ordenadas.some((c) => c.coberturas_detalle);
+    if (tieneDetalle) {
+      fila = addSectionHeader(ws, fila, "RESPONSABILIDAD CIVIL EXTRACONTRACTUAL (RCE)", numCols);
+      setConceptRow(ws, fila, "Límite máximo", ordenadas,
+        (c) => fmtPeso(cd(c).rce.limite), selUpper);
+      fila++;
+      setConceptRow(ws, fila, "Deducible", ordenadas,
+        (c) => {
+          const rce = cd(c).rce;
+          if (rce.sin_deducible) return "SIN DEDUCIBLE";
+          return fmtDeducible(rce.deducible_pct, rce.deducible_smmlv);
+        }, selUpper);
+      fila++;
+      fila++;
+
+      // ── PÉRDIDA POR DAÑOS ──
+      fila = addSectionHeader(ws, fila, "PÉRDIDA POR DAÑOS", numCols);
+      setConceptRow(ws, fila, "Total - Valor asegurado", ordenadas,
+        (c) => fmtPeso(cd(c).perdida_total_danios.valor_asegurado), selUpper);
+      fila++;
+      setConceptRow(ws, fila, "Total - Deducible", ordenadas,
+        (c) => fmtDeducible(cd(c).perdida_total_danios.deducible_pct, cd(c).perdida_total_danios.deducible_smmlv), selUpper);
+      fila++;
+      setConceptRow(ws, fila, "Parcial - Valor asegurado", ordenadas,
+        (c) => fmtPeso(cd(c).perdida_parcial_danios.valor_asegurado), selUpper);
+      fila++;
+      setConceptRow(ws, fila, "Parcial - Deducible", ordenadas,
+        (c) => fmtDeducible(cd(c).perdida_parcial_danios.deducible_pct, cd(c).perdida_parcial_danios.deducible_smmlv), selUpper);
+      fila++;
+      fila++;
+
+      // ── PÉRDIDA POR HURTO ──
+      fila = addSectionHeader(ws, fila, "PÉRDIDA POR HURTO", numCols);
+      setConceptRow(ws, fila, "Total - Deducible", ordenadas,
+        (c) => fmtDeducible(cd(c).perdida_total_hurto.deducible_pct, cd(c).perdida_total_hurto.deducible_smmlv), selUpper);
+      fila++;
+      setConceptRow(ws, fila, "Parcial - Deducible", ordenadas,
+        (c) => fmtDeducible(cd(c).perdida_parcial_hurto.deducible_pct, cd(c).perdida_parcial_hurto.deducible_smmlv), selUpper);
+      fila++;
+      fila++;
+
+      // ── COBERTURAS Y ASISTENCIAS ADICIONALES ──
+      fila = addSectionHeader(ws, fila, "COBERTURAS Y ASISTENCIAS ADICIONALES", numCols);
+      setConceptRow(ws, fila, "Terremoto / Eventos naturales", ordenadas,
+        (c) => chk(cd(c).terremoto), selUpper);
+      fila++;
+      setConceptRow(ws, fila, "Protección patrimonial", ordenadas,
+        (c) => chk(cd(c).proteccion_patrimonial), selUpper);
+      fila++;
+      setConceptRow(ws, fila, "Asistencia jurídica penal", ordenadas,
+        (c) => fmtJuridica(cd(c).asistencia_juridica_penal, cd(c).asistencia_juridica_penal_valor), selUpper);
+      fila++;
+      setConceptRow(ws, fila, "Asistencia jurídica civil", ordenadas,
+        (c) => fmtJuridica(cd(c).asistencia_juridica_civil, cd(c).asistencia_juridica_civil_valor), selUpper);
+      fila++;
+      setConceptRow(ws, fila, "Lucro cesante", ordenadas,
+        (c) => chk(cd(c).lucro_cesante), selUpper);
+      fila++;
+      setConceptRow(ws, fila, "Accidentes personales conductor", ordenadas,
+        (c) => fmtPeso(cd(c).accidentes_personales_conductor), selUpper);
+      fila++;
+      setConceptRow(ws, fila, "Asistencia en viaje", ordenadas,
+        (c) => chk(cd(c).asistencia_en_viaje), selUpper);
+      fila++;
+      setConceptRow(ws, fila, "Vehículo sustituto", ordenadas,
+        (c) => chk(cd(c).vehiculo_sustituto), selUpper);
+      fila++;
+      setConceptRow(ws, fila, "Gastos de transporte", ordenadas,
+        (c) => chk(cd(c).gastos_transporte), selUpper);
+      fila++;
+      setConceptRow(ws, fila, "Cobertura de vidrios", ordenadas,
+        (c) => chk(cd(c).cobertura_vidrios), selUpper);
+      fila++;
+      fila++;
+    }
+
+    // ── COBERTURAS (lista genérica - siempre presente) ──
     const todasCobs = [];
     for (const c of ordenadas) {
       for (const cob of c.coberturas || []) {
@@ -128,7 +205,7 @@ export async function handler(event) {
       }
     }
     if (todasCobs.length > 0) {
-      fila = addSectionHeader(ws, fila, "AMPAROS / COBERTURAS", numCols);
+      fila = addSectionHeader(ws, fila, "DETALLE AMPAROS / COBERTURAS", numCols);
       for (const cobNombre of todasCobs) {
         setConceptRow(
           ws, fila, cobNombre, ordenadas,
@@ -146,7 +223,7 @@ export async function handler(event) {
       fila++;
     }
 
-    // ── DEDUCIBLES ──
+    // ── DEDUCIBLES (lista genérica) ──
     const todasDeds = [];
     for (const c of ordenadas) {
       for (const d of c.deducibles || []) {
@@ -154,7 +231,7 @@ export async function handler(event) {
       }
     }
     if (todasDeds.length > 0) {
-      fila = addSectionHeader(ws, fila, "DEDUCIBLES", numCols);
+      fila = addSectionHeader(ws, fila, "DETALLE DEDUCIBLES", numCols);
       for (const dedNombre of todasDeds) {
         setConceptRow(
           ws, fila, dedNombre, ordenadas,
@@ -207,6 +284,51 @@ function fmtPeso(val) {
   const n = toInt(val);
   if (n === 0) return "—";
   return "$ " + n.toLocaleString("es-CO");
+}
+
+/** Acceso seguro a coberturas_detalle con defaults */
+function cd(cot) {
+  const d = cot.coberturas_detalle;
+  if (d) return d;
+  return {
+    rce: { limite: 0, deducible_pct: 0, deducible_smmlv: 0, sin_deducible: false },
+    perdida_total_danios: { valor_asegurado: 0, deducible_pct: 0, deducible_smmlv: 0 },
+    perdida_parcial_danios: { valor_asegurado: 0, deducible_pct: 0, deducible_smmlv: 0 },
+    perdida_total_hurto: { valor_asegurado: 0, deducible_pct: 0, deducible_smmlv: 0 },
+    perdida_parcial_hurto: { valor_asegurado: 0, deducible_pct: 0, deducible_smmlv: 0 },
+    terremoto: false,
+    proteccion_patrimonial: false,
+    asistencia_juridica_penal: false,
+    asistencia_juridica_penal_valor: 0,
+    asistencia_juridica_civil: false,
+    asistencia_juridica_civil_valor: 0,
+    lucro_cesante: false,
+    accidentes_personales_conductor: 0,
+    asistencia_en_viaje: false,
+    vehiculo_sustituto: false,
+    gastos_transporte: false,
+    cobertura_vidrios: false,
+  };
+}
+
+/** Formatea deducible como "10% / mín. 3 SMMLV" */
+function fmtDeducible(pct, smmlv) {
+  const parts = [];
+  if (pct && pct > 0) parts.push(`${pct}%`);
+  if (smmlv && smmlv > 0) parts.push(`mín. ${smmlv} SMMLV`);
+  if (parts.length === 0) return "—";
+  return parts.join(" / ");
+}
+
+/** Booleano → "Sí ampara" o "—" */
+function chk(val) {
+  return val ? "Sí ampara" : "—";
+}
+
+/** Muestra valor monetario si existe, o "Sí ampara" / "—" */
+function fmtJuridica(boolVal, valor) {
+  if (valor && valor > 0) return fmtPeso(valor);
+  return chk(boolVal);
 }
 
 function setCellStyled(ws, row, col, value, bgColor, bold = false, fontColor = "FF222222") {

@@ -6,15 +6,15 @@ const apiKeyLine = env.split("\n").find(line => line.startsWith("GEMINI_API_KEY=
 const apiKey = apiKeyLine.split("=")[1].trim();
 
 async function listModels() {
-  const genAI = new GoogleGenerativeAI(apiKey);
   try {
-    // There isn't a direct listModels in the client, but we can try to use the fetch API or a known method.
-    // Actually, the SDK has it? Let's check.
-    // Usually it's via the REST API.
     const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
     const response = await fetch(url);
     const data = await response.json();
-    console.log(JSON.stringify(data, null, 2));
+    if (data.models) {
+      console.log(data.models.map(m => m.name).join("\n"));
+    } else {
+      console.log(JSON.stringify(data, null, 2));
+    }
   } catch (error) {
     console.error("Error:", error);
   }
